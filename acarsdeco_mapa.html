@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AcarsDeco2 Map Mod PP2LA V1.0</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117; --panel: #111827; --muted: #94a3b8; --text: #e5e7eb;
+      --accent: #22d3ee; --danger: #ef4444; --ok: #22c55e;
+    }
+    html, body {
+      height: 100%; margin: 0; background: var(--bg); color: var(--text);
+      font: 14px/1.4 system-ui, sans-serif;
+    }
+    .wrap {
+      display: grid; grid-template-columns: 300px 1fr; gap: 16px; height: 100%;
+      padding: 12px; box-sizing: border-box;
+    }
+    .panel {
+      background: var(--panel); border-radius: 12px; padding: 12px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .row { display: flex; gap: 8px; align-items: center; }
+    input[type="text"] {
+      flex: 1; background:#0b1220; border:1px solid #1f2937; color:var(--text);
+      border-radius:10px; padding:10px 12px; outline:none;
+    }
+    button {
+      background: var(--accent); color:#06202a; border:0; padding:8px 10px;
+      border-radius:8px; cursor:pointer; font-weight:600; font-size:12px;
+    }
+    .stats {
+      display:grid; grid-template-columns:repeat(2,1fr); gap:8px;
+    }
+    .card {
+      background:#0b1220; border:1px solid #1f2937; border-radius:10px; padding:10px;
+      text-align:center;
+    }
+    .card .v { font-size:20px; font-weight:700; }
+    .card .k { color:var(--muted); font-size:12px; }
+    .pill { font-size:12px; padding:2px 8px; border-radius:999px; }
+    .ok { background:rgba(34,197,94,.15); color:var(--ok); }
+    .bad { background:rgba(239,68,68,.15); color:var(--danger); }
+    #map { width: 100%; height: 100%; border-radius: 12px; overflow: hidden; }
+    .aircraft-list { flex: 1; overflow-y: auto; }
+    .aircraft-item { padding:8px; border-bottom:1px solid #1f2937; cursor:pointer; }
+    .aircraft-item:hover { background:#1e293b; }
+    .footer { color: var(--muted); font-size: 12px; text-align: center; }
+    .hidden { display: none; }
+    .messages-panel { background: var(--panel); border-radius: 12px; padding: 12px; height: 100%; display: flex; flex-direction: column; }
+    .message-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+    .message-item { border-bottom: 1px solid #1f2937; padding: 6px 0; white-space: pre-wrap; }
+    .title { text-align: center; font-weight: bold; font-size: 16px; }
+  </style>
+</head>
+<body>
+
+<div class="title">AcarsDeco2 Map Mod PP2LA V1.0</div>
+
+<div id="page-map" class="wrap">
+  <div class="panel">
+    <div class="row">
+      <input id="source" type="text" value="http://127.0.0.1:5000/data.json" />
+      <button id="btnConnect">Connect</button>
+    </div>
+    <div class="row" style="justify-content:space-between">
+      <div id="connState" class="pill bad">disconnected</div>
+      <div id="lastUpdate" class="pill" style="background:#0b1220;border:1px solid #1f2937;color:var(--muted)">—</div>
+    </div>
+    <div class="stats">
+      <div class="card"><div class="v" id="statPlanes">0</div><div class="k">Aircraft</div></div>
+      <div class="card"><div class="v" id="statMsgs">0</div><div class="k">Messages</div></div>
+    </div>
+    <button onclick="clearLocations()">🗑 Clear Locations</button>
+    <div class="aircraft-list" id="aircraftList"></div>
+    <div class="footer">73 from PP2LA</div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<!-- Messages Tab -->
+<div id="page-messages" class="hidden wrap" style="grid-template-columns: 1fr;">
+  <div class="messages-panel">
+    <div class="message-controls">
+      <button onclick="showMap()">← Back</button>
+      <label style="font-size:12px;"><input type="checkbox" id="autoScroll" checked /> Auto-scroll</label>
+      <button onclick="clearMessages()">🗑 Clear Messages</button>
+    </div>
+    <h2 id="msg-title">Messages</h2>
+    <div id="messagesContainer" style="overflow-y:auto; flex:1;"></div>
+  </div>
+</div>
+
+<script>
+let map, markersLayer, pollTimer = null;
+let aircraftStore = [];
+let totalMessages = 0;
+let positionsStore = {};
+
+function initMap() {
+  map = L.map('map').setView([-15.78, -47.93], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+}
+function setConnState(ok) {
+  const el = document.getElementById('connState');
+  el.className = 'pill ' + (ok ? 'ok' : 'bad');
+  el.textContent = ok ? 'connected' : 'disconnected';
+}
+function setLastUpdate(ts) {
+  document.getElementById('lastUpdate').textContent = ts ? new Date(ts).toLocaleTimeString() : '—';
+}
+function updateStats() {
+  document.getElementById('statPlanes').textContent = aircraftStore.length;
+  document.getElementById('statMsgs').textContent = totalMessages;
+}
+function connect() {
+  clearInterval(pollTimer);
+  const url = document.getElementById('source').value.trim();
+  if (!url.startsWith('http')) return alert("Use http://host:port/data.json");
+  pollTimer = setInterval(() => fetchOnce(url), 2000);
+  fetchOnce(url);
+  setConnState(true);
+}
+async function fetchOnce(url) {
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json();
+    handlePayload(payload);
+  } catch {
+    setConnState(false);
+  }
+}
+function handlePayload(payload) {
+  const list = payload?.planes ?? [];
+  aircraftStore = list.sort((a,b) => (b.last_seen||0) - (a.last_seen||0));
+  totalMessages = aircraftStore.reduce((sum, ac) => sum + ac.msgs_count, 0);
+  renderAircraftList();
+  renderMap();
+  updateStats();
+  setLastUpdate(Date.now());
+}
+function renderMap() {
+  markersLayer.clearLayers();
+  for (const it of aircraftStore) {
+    if (typeof it.lat !== 'number' || typeof it.lon !== 'number') continue;
+    if (!positionsStore[it.flight]) positionsStore[it.flight] = [];
+    positionsStore[it.flight].push([it.lat, it.lon]);
+    L.polyline(positionsStore[it.flight], {color:'cyan'}).addTo(markersLayer);
+    L.marker([it.lat, it.lon]).addTo(markersLayer)
+      .bindPopup(`<b>${it.flight || it.reg}</b><br>Messages: ${it.msgs_count}`);
+  }
+}
+function renderAircraftList() {
+  const listEl = document.getElementById('aircraftList');
+  listEl.innerHTML = '';
+  aircraftStore.forEach(ac => {
+    const callsign = ac.flight || '';
+    const div = document.createElement('div');
+    div.className = 'aircraft-item';
+    div.textContent = `${ac.msgs_count} • ${ac.reg} ${callsign ? "• " + callsign : ""}`;
+    div.onclick = () => loadMessages(ac.flight);
+    listEl.appendChild(div);
+  });
+}
+async function loadMessages(flight) {
+  try {
+    const res = await fetch(`/messages/${flight}`);
+    const data = await res.json();
+    document.getElementById('msg-title').textContent = `Messages from ${flight}`;
+    const container = document.getElementById('messagesContainer');
+    container.innerHTML = '';
+    data.messages.forEach(msg => {
+      const div = document.createElement('div');
+      div.className = 'message-item';
+      div.textContent = msg; // raw message
+      container.insertBefore(div, container.firstChild);
+    });
+    if (document.getElementById('autoScroll').checked) {
+      container.scrollTop = 0;
+    }
+    showMessagesTab();
+  } catch (err) {
+    alert("Error loading messages");
+  }
+}
+function clearMessages() {
+  document.getElementById('messagesContainer').innerHTML = '';
+}
+function clearLocations() {
+  positionsStore = {};
+  markersLayer.clearLayers();
+}
+function showMessagesTab() {
+  document.getElementById('page-map').classList.add('hidden');
+  document.getElementById('page-messages').classList.remove('hidden');
+}
+function showMap() {
+  document.getElementById('page-messages').classList.add('hidden');
+  document.getElementById('page-map').classList.remove('hidden');
+}
+document.getElementById('btnConnect').onclick = connect;
+initMap();
+</script>
+</body>
+</html>

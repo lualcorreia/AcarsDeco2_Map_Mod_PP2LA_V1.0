@@ -1,0 +1,125 @@
+AcarSDeco2 v.20181201
+
+- Fixed bug "ERROR Aircraftcache :: getAircraftList <> regno in DB but not in cache"
+- Code cleanup
+
+v.20180603
+
+- Added option providing the ability to export messages to disk as comma separated value (CSV) files.
+  It has two types: --logfile-sbs <arg> for export original ACARS messages and --logfile-esbs <arg> - the same with additional information from reference data sources.
+  The argument requires a full path to and file name. The program will add a time stamp to the beginning and extension *.csv.
+- Changed the file name when you export the console messages to a log file.
+- Corrected ICAO and IATA airline codes compliance.
+- Code cleanup
+
+
+v.20170914
+
+- In some options added separate format "pp" for Planeplotter to send messages over the network.
+- The names of components in a message header were changed in accordance with the ARINC 618-8 Air/Ground Character-Oriented Protocol Specification.
+ 
+
+v.20170907
+
+Fixed:
+
+- Output format to PlanePlotter over UDP in the option: [font=courier]--outConnectUdp <sbs:ip:port>[/font]
+- Select the instance of dongle via serial number in the option: [font=courier]--device-serial <n>[/font]
+- Callsign now displays in the table if not used the option for additional data from VRS
+- Some changes in the code
+
+
+
+AcarSDeco2 is a multi-channels ACARS decoder.
+It supports direct input from a RTL2832U dongle in order to decode up to 4 channels simultaneously (within a ~1.2MHz band segment) or input/output data from network sources.
+
+
+acarsdeco2.exe --help
+
+AcarSDeco2 v.20181201
+Program options:
+  -h [ --help ]         This help message
+  --device-list         List available SDR devices
+  --device-index arg    Select SDR device (default: 0)
+  --device-serial arg   Select SDR device by serial number
+  --gain arg            Set preamp gain of receiver, dB (default: auto)
+  --freq-correction arg Set oscillator frequency correction, ppm (default: 0)
+  --agc                 Enable automatic gain control in SDR chip (default:
+                        off)
+  --freq arg            Set receiver frequency, Hz
+                        Specify option --freq multiple times to multiple
+                        channels (Example: --freq XX --freq YY ...)
+  --inConnect arg       Input connector. Format: (sbs|ad2):host:port
+  --inConnectId arg     Named input connector. Format: (sbs|ad2):host:port:ID
+  --inServer arg        Input server. Format: (sbs|ad2):port
+  --inServerId arg      Named input server. Format: (sbs|ad2):port:ID
+  --inServerUdp arg     Input UDP server. Format: (sbs|ad2):port
+  --outServer arg       Output server. Format: (sbs|ad2|pp):port
+  --outConnect arg      Output connector. Format (sbs|ad2|pp):host:port
+  --outConnectUdp arg   Output UDP connector. Format: (sbs|ad2|pp):host:port
+  --http-port arg       Set port for http server (default: 8080)
+  --vrs-url arg         Set VirtualRadarServer url for additional aircraft data
+                        Example: http://example.com (default: off)
+  --pictures-url arg    Set aircraft pictures collection url
+                        Example: http://site.com/path/to/ (default: off)
+  --pictures arg        Set aircraft pictures collection local path
+                        Example: http://site.com/path/to/ (default: off)
+  --silhouettes arg     Set path to directory of aircrafts' silhouettes
+  --banners arg         Set path to directory of operators' logos
+  --frdb arg            Set path to flightroutes database file
+  --db arg              Set path to basestation database file
+  --no-uplink           Don't display uplink messages (default: on)
+  --no-sq               Don't display messages with SQ label (default: on)
+  --no-empty            Don't display empty messages (default: on)
+  --logfile arg         Set path to log filename (default: off)
+  --logfile-sbs arg     Set path to SBS CSV log filename (default: off)
+  --logfile-esbs arg    Set path to extended SBS CSV log filename (default:
+                        off)
+  --no-console          Disable logging on console (default: on)
+
+
+Examples:
+
+acarsdeco2.exe --gain 38.6 --freq-correction 64 --freq 131550000 --freq 131725000 --http-port 8888 --vrs-url http://192.168.1.10:80 --outServer ad2:30008 --outConnectUdp pp:127.0.0.1:9742 --pictures d:\data\pictures --silhouettes d:\data\silhouettes --db d:\data\basestation.sqb --frdb d:\data\flightroute.sqb --banners d:\data\logos
+
+--gain 38.6 - setting gain for receiver R820T/T2. Determine the optimal value for your receiving conditions once, for example, in SDRSharp.
+--freq-correction 64 - correction of dongle internal oscillator. This is absolutely critical accurate adjustment for multi-channel receiver.
+--freq 131550000 --freq 131725000 - frequency of ACARS channel (up to 4).
+--http-port 8888 - change default HTTP port 8080 to other port number.
+--vrs-url http://192.168.64.10:80 - network address of VirtualRadarServer for getting an additional ADS-B aircraft's data in the WEB window.
+--outServer ad2:30008 - set TCP server for transmit data in original AD2 ACARS format on port 30008.
+--outConnectUdp pp:127.0.0.1:9742 - set UDP client for transmitting ACARS data to PlanePlotter.
+
+
+If running the program with one option "--help" and a description of the command-line options will be printed on console.
+To stop the program, press the key combination <Control+C>
+
+For running acarsdeco2.exe you need use Zadig: http://zadig.akeo.ie/ which is meant to install a libusb compatible driver, for a device that does not yet have such a driver installed.
+The program is not required any other libraries.
+
+When you run this version of modesmixer2.exe you can get an error that msvcp141.dll and msvcr141.dll are missing in your OS.
+Please, download the Microsoft Visual C++ 2017 Redistributable from the Microsoft site.
+This package installs run-time components of Visual C++ libraries and can be used to run such applications on a computer even if it does not have Visual Studio 2017 installed.
+
+You could download Microsoft Visual C++ 2017 Redistributable
+from here: https://www.visualstudio.com/downloads/ - Microsoft Visual C++ Redistributable for Visual Studio 2017 - the second paragraph from the bottom and check option for x86.
+You will need to install file of 32 bit version VC_redist.x86.exe regardless of what bitness has your operating system!
+
+
+To successfully receiving ACARS signals by RTL dongle, in addition to using the proper antenna-feeder device, need to determine the true value of error correction of dongle oscillator in PPM.
+RTL2832 tuner has oscillator error is 30...90 PPM, relatively stable once warmed up, and stable from day to day for a given dongle. Perform a one-time calibration of dongle oscillator is usually not difficult. This can be done in the program SDR#.
+
+The signals may not appear exactly on, for example, 131550 kHz or 131725 kHz labels of tuning scale, since of error dongle oscillator. Move the red vertical line at the top of the FFT screen so that it was several left or right of the vertical axis of the window to avoid the effect of central peak near DC component.
+At the top, at the dial scale set one of ACARS frequency, for example, 131.725.000.
+
+To do calibration in SDR# desirable with parameters that are close to real, when acarsdeco2 will running. Set the receive mode to AM, bandwidth to 10.0 kHz. So, click on "Configure" and set the "Sample Rate" in 1.4 MSPS. Click "Play" to start it. Adjust slider bar "RF Gain" until you get good reception of the ACARS signals.
+ACARS signals look like small horizontal multicolored lines on the waterfall and if you are listening to its through your speakers, they will just sound like blips of noise.
+
+When you zoom its (Use "Zoom" knob to) becomes clearly visible the structure of the amplitude-modulated signal of two symmetrical sides (LSB/USB) and the carrier frequency in the center.
+The optimal RF gain such that the signal is strong, but the noise floor is low.
+
+Then start clicking the up/down arrows next to "Frequency correction (ppm)" until the actual signal lines up so that the red line is right in the middle of the line of the signal on signal-carrier frequency (see attached acarsdeco2_RTL_correct_ppm_1.jpg picture).
+Once it lines up you should be good to go. Close the "Configure" screen.
+
+
+/sergsero
